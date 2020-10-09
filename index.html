@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge"; charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Children Service Providers Web Map</title>
+
+	<!-- adding leaflet css and js files-->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+   			integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+   			crossorigin=""/>
+	<script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+   			integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+   			crossorigin=""></script>
+
+	<!-- add world country file. Dont forget to modify the file by adding variable name before data = {} -->
+	<script type="text/javascript" src="data/cso_covid_v2.geojson"></script>
+	<script type="text/javascript" src="data/world_vision.geojson"></script>
+	<script type="text/javascript" src="data/shelters.geojson"></script>
+	<script type="text/javascript" src="data/covid_cases.geojson"></script>
+
+
+	<script type="text/javascript">
+
+		function init() {
+			// set the centre and zoom level
+			var map = new L.map('mapid').setView([-0.89, 36.819], 6);
+			// add basemaps from cartodb - darkmatter.
+			var CartoDB = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png', {
+				attribution: '&copy; GeopsyResearch, bmitto contributors: <a href="http://cartodb.com/attributions#basemaps">CartoDB</a>',
+				subdomains:'abcd',
+				minZoom:4,
+				maxZoom:15
+			}).addTo(map);
+			// add the second basemap from OSM
+	        var osm = L.tileLayer ('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+	           	attribution: '&copy; OSM',
+	            minZoom: 4,
+	            maxZoom: 15
+	        });
+
+
+// Functions to add Polygon counties
+// So first, we have define functions
+
+// get color depending on poverty value
+	function getColor(p) {
+		return p > 200 ? '#800026' :
+				p > 100  ? '#BD0026' :
+				p > 50  ? '#E31A1C' :
+				p > 20   ? '#FD8D3C' :
+				p > 10   ? '#FED976' :
+						   '#FFEDA0';
+	}
+
+	function style(feature) {
+		return {
+			weight: 2,
+			opacity: 1,
+			color: 'white',
+			dashArray: '3',
+			fillOpacity: 0.7,
+			interactive: true,
+			fillColor: getColor(feature.properties.Cases_per100k)
+		};
+	}
+
+	function highlightFeature(e) {
+		var layer = e.target;
+
+		layer.setStyle({
+			weight: 5,
+			color: '#666',
+			dashArray: '',
+			fillOpacity: 0.7
+		});
+
+		if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+			layer.bringToFront();
+		}
+
+		info.update(layer.feature.properties);
+	}
+
+
+	function resetHighlight(e) {
+		ct.resetStyle(e.target);
+		info.update();
+	}
+
+	function zoomToFeature(e) {
+		map.fitBounds(e.target.getBounds());
+	}
+
+	function onEachFeature(feature, layer) {
+		layer.on({
+			//mouseover: highlightFeature,
+			//mouseout: resetHighlight,
+			click: zoomToFeature
+		});
+	}
+//Specifying the legend
+var legend = L.control({position: 'topright'});
+
+	legend.onAdd = function (map) {
+
+		var div = L.DomUtil.create('div', 'info legend'),
+			grades = [0,10, 20, 50, 100, 200],
+			labels = ['<b>COVID19 Cases Per 100,000</b>'],
+			from, to;
+			
+		for (var i = 0; i < grades.length; i++) {
+			from = grades[i];
+			to = grades[i + 1];
+
+			labels.push(
+				'<i style="background:' + getColor(from + 1) + '"></i> ' +
+				from + (to ? '&ndash;' + to : '+'));
+		}
+
+		div.innerHTML = labels.join('<br>');
+		return div;
+	};
+
+legend.addTo(map);
+
+	var covid = new L.geoJSON(cases, {style: style, onEachFeature: onEachFeature}).addTo(map);
+        //Add pop ups for the polygos
+		covid.eachLayer(function (layer) {
+		layer.bindPopup('<b>'+layer.feature.properties.County+' County'+'</b><br />'
+		+'<b>'+ 'Population: ' + '</b>'+layer.feature.properties.Population+'<br />'
+		+'<b>'+ 'COVID19 Cases: '+ '</b>'+layer.feature.properties.Cases+'<br />'
+		+'<b>'+ 'Cases per 100,000: '+ '</b>'+layer.feature.properties.Cases_per100k
+
+		);
+	});
+
+		// read the geojson file. remember that we added a variable "points" in the file
+			var cso_site = new L.geoJSON(cso, {
+				pointToLayer: function(feature, latlng) {
+					var marker = L.marker(latlng, {icon: L.icon({
+														iconUrl: 'icons/radial.gif',
+														iconSize: [15, 15]}) });
+					var feat_website = feature.properties.website;
+					if (feat_website != null){
+					marker.bindPopup("<table><tr><td><b>Organization</td><td><b>"+ feature.properties.organization + "</b></b><td/></tr>\
+						<tr><td><b> County</b></td><td>"+ feature.properties.county+"</td></tr>\
+						<tr><td><b> Site</b></td><td>"+feature.properties.location+"</td></tr>\
+						<tr><td><b> Type</b></td><td>"+feature.properties.type+"</td></tr>\
+						<tr><td><b> Contact Person</b></td><td>"+feature.properties.contact+"</td></tr>\
+						<tr><td><b> Email</b></td><td>"+feature.properties.email+"</td></tr>\
+						<tr><td><b> Website</b></td><td><a href="+feature.properties.website+" target='_blank'>Visit website</a></td></tr>\
+						<tr><td><b> Activity</b></td><td>"+feature.properties.activities+"</td></tr></table>");
+						}else{
+						marker.bindPopup("<table><tr><td><b>Organization</td><td><b>"+ feature.properties.organization + "</b></b><td/></tr>\
+						<tr><td><b> County</b></td><td>"+ feature.properties.county+"</td></tr>\
+						<tr><td><b> Site</b></td><td>"+feature.properties.location+"</td></tr>\
+						<tr><td><b> Type</b></td><td>"+feature.properties.type+"</td></tr>\
+						<tr><td><b> Contact Person</b></td><td>"+feature.properties.contact+"</td></tr>\
+						<tr><td><b> Email</b></td><td>"+feature.properties.email+"</td></tr>\
+						<tr><td><b> Activity</b></td><td>"+feature.properties.activities+"</td></tr></table>");
+						}
+					return marker;
+				},
+
+			}).addTo(map);
+
+
+
+			var wvi = new L.geoJSON(wv, {
+				pointToLayer: function(feature, latlng) {
+					var circle = L.circleMarker(latlng, {
+						color: 'white',
+						fillColor: 'red',
+						fillOpacity: 0.7,
+						radius: 5,
+						weight:2,
+						opacity: 0.9
+					});
+
+					circle.bindPopup("<table><tr><td><b> Organization</td><td><b> World Vision </b></b></td></tr>\
+						<tr><td><b> County</b></td><td>"+feature.properties.county+"</td></tr>\
+						<tr><td><b> Site</b></td><td>"+feature.properties.site+"</td></tr>\
+						<tr><td><b> Contact Person</b></td><td>"+feature.properties.contact+"</td></tr>\
+						<tr><td><b> Activities</b></td><td>"+feature.properties.activities+"</td></tr>\
+						<tr><td><b> Email</b></td><td>"+feature.properties.email+"</td></tr>\
+						<tr><td><b> Website</b></td><td><a href='https://www.wvi.org/kenya' target='_blank'>Click Here</a></td></tr></table>");
+					return circle;
+				},
+
+	}).addTo(map);
+	
+	
+			var shelters = new L.geoJSON(shelter, {
+				pointToLayer: function(feature, latlng) {
+					var marker = L.marker(latlng, {icon: L.icon({
+														iconUrl: 'icons/hospital.png',
+														iconSize: [12, 12]}) });
+					marker.bindPopup("<table><tr><td><b> Shelter</td><td><b>"+feature.properties.Name+"</b></b></td></tr>\
+						<tr><td><b> County</b></td><td>"+feature.properties.County+"</td></tr>\
+						<tr><td><b> Operator</b></td><td>"+feature.properties.Operator+"</td></tr>\
+						<tr><td><b> Position</b></td><td>"+feature.properties.Role+"</td></tr>\
+						<tr><td><b> Telephone</b></td><td>"+feature.properties.Telephone+"</td></tr>\
+						<tr><td><b> Email</b></td><td>"+feature.properties.Email+"</td></tr></table>");
+					return marker;
+				},
+
+			}).addTo(map);
+			
+
+
+			// add a container to control the layers
+			L.control.layers({"CartoDB": CartoDB, "OpenStreetMap": osm}, {"Local CSO Sites": cso_site, "World Vision (Kenya)": wvi, "Safe Shelters": shelters,"Covid Cases": covid}, {position: 'topleft'}).addTo(map);
+		};
+
+
+
+	</script>
+
+	<style type="text/css">
+		table {
+			border: 1px solid black;
+			border-collapse: collapse;
+		}
+		td {
+			border: 1px solid black;
+		}
+
+		.legend {
+			padding: 6px 18px;
+			background-color: rgba(255,255,255,0.8);
+			box-shadow: 0 0 15px rgba(0,0,0,0.2);
+			border-radius: 5px;
+		}
+		.legend i {
+			width: 18px;
+			height: 18px;
+			float: left;
+			margin-right: 8px;
+			opacity: 0.7;
+		}
+		div.legend.leaflet-control br {
+			clear: both;
+		}
+	</style>
+	</head>
+<body onload="init()">
+	<!-- set the div element and style the map -->
+	<div id="mapid" style="height: 700px; width: 100%; padding: 20px"></div>
+	<table id="properties"></table>
+</body>
+</html>
